@@ -1,0 +1,35 @@
+# 本地默认配置，敏感信息请用环境变量覆盖，不要写入仓库
+spring:
+  application:
+    name: cleardesk
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:123456}
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    database: ${REDIS_DATABASE:0}
+  session:
+    store-type: redis
+    timeout: 1d
+    redis:
+      namespace: cleardesk:session
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+    session:
+      timeout: 1d
+      cookie:
+        http-only: true
+        same-site: lax
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: false
+  global-config:
+    db-config:
+      logic-delete-field: isDelete
+      logic-delete-value: 1
+      logic-not-delete-value: 0

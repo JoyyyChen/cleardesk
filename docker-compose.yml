@@ -1,0 +1,15 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: cleardesk
+    ports:
+      - "3306:3306"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - ./sql/create_table.sql:/docker-entrypoint-initdb.d/init.sql
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
