@@ -1,0 +1,93 @@
+# 单机生产部署：应用 + MySQL + Redis 全在一个 Compose 里。
+# 与开发用的 docker-compose.yml 分开：那个只起依赖并把端口暴露给宿主机，这个只给应用用。
+#
+# 用法（详见 doc/deployment.md）：
+#   cp .env.example .env    # 然后改成真实强密码，不要提交
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml logs -f app
+#
+# ⚠️ 项目名必须与开发编排区分开（见文件末尾 name:），否则容器名和数据卷名会撞车：
+#    两边都叫 mysql-data，会被当成同一个卷，一个 down -v 就能删掉另一个的数据。
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 必须设置}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cleardesk}
+      # 建一个专用应用账号，不让应用直接用 root
+      MYSQL_USER: ${MYSQL_USER:-cleardesk}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD 必须设置}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 仅数据卷为空时执行，用来建表
+      - ./sql/create_table.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # 注意：不映射 3306 到宿主机。数据库只在内网可达，避免被公网扫库。
+    # 确实需要远程连库时用 SSH 隧道，不要开放端口。
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks: [cleardesk-net]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    # 同理不映射 6379；Session 数据丢了只影响登录态，但持久化开着更稳
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [cleardesk-net]
+
+  app:
+    build:
+      context: .
+      # 拉不到 Docker Hub 时覆盖，例如 docker.1ms.run/
+      args:
+        REGISTRY: ${REGISTRY:-}
+    restart: unless-stopped
+    environment:
+      # 主机名用 compose 的 service 名，由 Docker 内部 DNS 解析；
+      # 这里写 localhost 是错的：容器里的 localhost 指容器自己。
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: ${MYSQL_DATABASE:-cleardesk}
+      MYSQL_USERNAME: ${MYSQL_USER:-cleardesk}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD 必须设置}
+      # 应用和 MySQL 同在 Docker 内网，不需要 TLS
+      MYSQL_SSL: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    ports:
+      # 只监听宿主机回环，由 Nginx 反代并终止 TLS；
+      # 写成 "8080:8080" 会让应用端口直接暴露到公网。
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      # 必须用 service_healthy：简单 depends_on 只保证启动顺序，
+      # MySQL 没 ready 时应用会连库失败直接退出。
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [cleardesk-net]
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  cleardesk-net:
+    driver: bridge
+
+# 显式项目名：两个编排放在同一台机器上时，容器名 / 卷名 / 网络名都以它作前缀，
+# 不用它就会都用目录名 "cleardesk"，导致互相顶替和数据卷混用。
+name: cleardesk-prod

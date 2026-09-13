@@ -2,7 +2,11 @@
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=true&serverTimezone=Asia/Shanghai
+    # MYSQL_SSL=true 默认开启（云数据库走公网/SSL 更安全）；
+    # 应用与 MySQL 同在 Docker 内网时设为 false，省掉证书开销。
+    # allowPublicKeyRetrieval：MySQL 8 默认 caching_sha2_password，非 SSL 连接下
+    # 不开启这个参数会直接报 "Public Key Retrieval is not allowed" 连不上。
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=${MYSQL_SSL:true}&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
   data:

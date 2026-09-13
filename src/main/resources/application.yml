@@ -4,7 +4,8 @@ spring:
     name: cleardesk
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    # MYSQL_SSL：本地/Docker 内网默认 false；连云数据库（RDS 等）时设成 true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=${MYSQL_SSL:false}&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:123456}
   data:
