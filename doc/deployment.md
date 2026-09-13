@@ -2,6 +2,9 @@
 
 目标：有一个能点开的地址，面试时可以直接演示。这是求职场景下投入产出比最高的一件事。
 
+> **服务器已经买好了？** 这份文件讲原理（面试要问的"为什么"），
+> 逐步操作请照 **[deploy-runbook.md](deploy-runbook.md)** 走：命令、预期输出、报错对照表都在那里。
+
 ## 先决定用哪条路
 
 | 方案 | 成本 | 适合 | 代价 |
@@ -196,7 +199,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 ## 9. 待补项（做完上面再来）
 
 - [ ] 加 `spring-boot-starter-actuator`，暴露 `/actuator/health`，再配一个 HTTP 健康检查
-- [ ] 数据备份：`mysqldump` 定时任务 + 落到对象存储（面试常问"你的数据丢了怎么办"）
+- [x] 数据备份：`scripts/backup-db.sh`（mysqldump + gzip + 轮转，挂 cron 即可）；**还没做的**是推到对象存储，机器挂了备份会一起没
 - [ ] 用 Flyway 或 Liquibase 管表结构变更（现在还是手工执行 `create_table.sql`，改了字段只能手改库）
 - [ ] 前端页面（只投后端岗可以不做）
 - [ ] GitHub Actions：push 自动构建 + 推镜像到服务器（把"我手动部署"升级成"有 CI/CD"）

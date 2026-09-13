@@ -28,3 +28,6 @@ build/
 .env
 application-local.yml
 *.log
+
+# 数据库备份产物（含真实数据，绝不入库）
+backups/

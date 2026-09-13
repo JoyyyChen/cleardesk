@@ -1,0 +1,21 @@
+# 阶段一覆盖文件：没有域名时，用 http://<服务器IP>:8080 直接访问。
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.ip-only.yml up -d --build
+#
+# 为什么不直接改 docker-compose.prod.yml：
+#   那个文件描述的是"最终态"（应用只监听回环，由 Nginx 终止 TLS）。
+#   把临时过渡写进覆盖文件，接入域名那天只要去掉 -f docker-compose.ip-only.yml，
+#   生产编排不用回滚任何东西，也就不会出现"改了忘改回来"。
+#
+# 用 !override 是为了**替换**基础文件里的端口列表，而不是追加
+# （追加会让 127.0.0.1:8080 和 0.0.0.0:8080 同时存在并冲突）。
+# !override 需要 Docker Compose v2.24.4+，用 docker compose version 确认；
+# 版本更低就把基础文件里的 "127.0.0.1:8080:8080" 直接改成 "8080:8080"。
+#
+# 安全边界：0.0.0.0:8080 意味着应用端口对公网开放，
+#   - 访问控制只能靠云安全组（Docker 会绕过 ufw，见 doc/deploy-runbook.md 1.1）；
+#   - 阶段二接上 Nginx 后必须去掉这个文件，否则 8080 一直裸着。
+services:
+  app:
+    ports: !override
+      - "8080:8080"

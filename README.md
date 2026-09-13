@@ -20,6 +20,19 @@ docker compose up -d
 
 生产配置见 `application-prod.yml`，通过环境变量注入 `MYSQL_HOST`、`MYSQL_USERNAME`、`MYSQL_PASSWORD`、`REDIS_HOST`。不要把密钥提交进仓库。
 
+## 部署到服务器
+
+- **[doc/deploy-runbook.md](doc/deploy-runbook.md)**：逐步执行单（服务器初始化 → 配置 → 启动 → 验证 → 运维），含预期输出和报错对照表。
+- **[doc/deployment.md](doc/deployment.md)**：部署原理与面试追问，讲"为什么这么配"。
+- `scripts/smoke-test.sh`：部署后一键自检（容器健康、网络解析、环境变量、建表、管理员账号、端口暴露）。
+- `scripts/backup-db.sh`：mysqldump 备份 + gzip + 按天轮转，挂 cron 使用。
+
+```bash
+cd /opt/cleardesk
+bash scripts/smoke-test.sh      # 自检
+bash scripts/backup-db.sh       # 备份
+```
+
 ## 构建与命令行运行
 
 Maven Wrapper 已可用，首次运行会下载 Maven 3.9.11（配置见 `.mvn/wrapper/maven-wrapper.properties`）：

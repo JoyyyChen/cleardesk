@@ -2,6 +2,10 @@
 # 之前没有这个文件时，core.autocrlf=true 的机器每次都会把检出内容改成 CRLF 并刷出警告。
 * text=auto eol=lf
 
+# Shell 脚本必须是 LF：CRLF 会让服务器上的 bash 报
+# "bad interpreter: /usr/bin/env bash^M" 之类的错。
+*.sh text eol=lf
+
 # Windows 批处理必须是 CRLF
 *.cmd text eol=crlf
 *.bat text eol=crlf
