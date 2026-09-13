@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
-import javax.validation.Valid;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 
 /**
  * 用户接口
@@ -36,6 +36,9 @@ public class UserController {
         return ResultUtils.success(result);
     }
 
+    /**
+     * 登录成功后 Session 只写入用户 id。
+     */
     @PostMapping("/login")
     public BaseResponse<UserVO> userLogin(@Valid @RequestBody UserLoginRequest userLoginRequest,
                                           HttpServletRequest request) {
@@ -43,12 +46,18 @@ public class UserController {
         return ResultUtils.success(userVO);
     }
 
+    /**
+     * 使当前 Session 失效。
+     */
     @PostMapping("/logout")
     public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
         boolean result = userService.userLogout(request);
         return ResultUtils.success(result);
     }
 
+    /**
+     * 需登录。返回当前用户脱敏信息。
+     */
     @AuthCheck
     @GetMapping("/current")
     public BaseResponse<UserVO> getCurrentUser() {
@@ -56,6 +65,9 @@ public class UserController {
         return ResultUtils.success(userVO);
     }
 
+    /**
+     * 需管理员。角色以数据库为准。
+     */
     @AuthCheck(mustAdmin = true)
     @GetMapping("/search")
     public BaseResponse<PageResult<UserVO>> searchUsers(UserQueryRequest queryRequest) {
@@ -63,6 +75,9 @@ public class UserController {
         return ResultUtils.success(result);
     }
 
+    /**
+     * 需管理员。逻辑删除。
+     */
     @AuthCheck(mustAdmin = true)
     @PostMapping("/delete")
     public BaseResponse<Boolean> deleteUser(@Valid @RequestBody UserDeleteRequest deleteRequest) {

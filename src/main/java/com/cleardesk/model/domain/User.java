@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.util.Date;
+import java.time.LocalDateTime;
 
 /**
  * 用户实体
@@ -39,10 +39,13 @@ public class User implements Serializable {
      */
     private Integer userStatus;
 
-    private Date createTime;
+    private LocalDateTime createTime;
 
-    private Date updateTime;
+    private LocalDateTime updateTime;
 
+    /**
+     * 是否删除 0-未删 1-已删（逻辑删除）
+     */
     @TableLogic
     private Integer isDelete;
 

@@ -11,10 +11,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import static com.cleardesk.constant.UserConstant.ADMIN_ROLE;
 import static com.cleardesk.constant.UserConstant.USER_LOGIN_STATE;
@@ -26,6 +26,9 @@ import static com.cleardesk.constant.UserConstant.USER_STATUS_NORMAL;
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
 
+    /**
+     * 与 UserService 循环依赖，延迟注入。
+     */
     @Lazy
     @Resource
     private UserService userService;
@@ -45,6 +48,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             throw new BusinessException(ErrorCode.NOT_LOGIN);
         }
         User user = userService.getById((Long) userIdObj);
+        // 用户已删或已禁用时清 Session，避免继续拿着失效 id 访问
         if (user == null) {
             session.invalidate();
             throw new BusinessException(ErrorCode.NOT_LOGIN, "登录态无效");
@@ -62,6 +66,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+        // ThreadLocal 不会随请求结束自动清，不 remove 会在线程池里串到下一个请求
         UserHolder.remove();
     }
 }

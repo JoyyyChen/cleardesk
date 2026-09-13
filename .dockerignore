@@ -1,0 +1,18 @@
+# 构建上下文瘦身：这些内容不该进镜像
+.git
+.gitignore
+.idea
+.vscode
+*.iml
+target
+doc
+*.log
+.env
+.env.*
+!.env.example
+mvnw
+mvnw.cmd
+README.md
+docker-compose.yml
+Dockerfile
+.dockerignore

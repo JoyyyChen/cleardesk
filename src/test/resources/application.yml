@@ -1,25 +1,29 @@
-# 测试环境使用内存 Session，避免强依赖 Redis
+# 测试环境排除 Redis / Redis Session，避免强依赖 Redis
 spring:
   application:
     name: cleardesk
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:123456}
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
-  session:
-    store-type: none
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+      - org.springframework.boot.session.data.redis.autoconfigure.SessionDataRedisAutoConfiguration
+  jackson:
+    time-zone: Asia/Shanghai
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
 server:
   port: 0
   servlet:
     context-path: /api
 mybatis-plus:
   configuration:
-    map-underscore-to-camel-case: false
+    map-underscore-to-camel-case: false # 列名与实体字段一致（如 userAccount），不做下划线转换
   global-config:
     db-config:
       logic-delete-field: isDelete

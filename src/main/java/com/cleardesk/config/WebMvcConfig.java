@@ -5,8 +5,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
+/**
+ * 注册鉴权拦截器，拦截全部路径；是否校验登录看方法上的 {@link com.cleardesk.annotation.AuthCheck}。
+ */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 

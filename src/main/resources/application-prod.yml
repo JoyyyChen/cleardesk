@@ -5,9 +5,10 @@ spring:
     url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=true&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
-  redis:
-    host: ${REDIS_HOST}
-    port: ${REDIS_PORT:6379}
-    database: ${REDIS_DATABASE:0}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
 server:
   address: 0.0.0.0

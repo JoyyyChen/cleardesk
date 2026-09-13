@@ -4,18 +4,24 @@ spring:
     name: cleardesk
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:cleardesk}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:123456}
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    database: ${REDIS_DATABASE:0}
-  session:
-    store-type: redis
-    timeout: 1d
+  data:
     redis:
-      namespace: cleardesk:session
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+  session:
+    timeout: 1d
+    data:
+      redis:
+        namespace: cleardesk:session
+  jackson:
+    time-zone: Asia/Shanghai
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
 server:
   port: 8080
   servlet:
@@ -27,7 +33,7 @@ server:
         same-site: lax
 mybatis-plus:
   configuration:
-    map-underscore-to-camel-case: false
+    map-underscore-to-camel-case: false # 列名与实体字段一致（如 userAccount），不做下划线转换
   global-config:
     db-config:
       logic-delete-field: isDelete

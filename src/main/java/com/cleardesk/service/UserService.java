@@ -1,6 +1,6 @@
 package com.cleardesk.service;
 
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.cleardesk.common.PageResult;
 import com.cleardesk.model.domain.User;
 import com.cleardesk.model.dto.UserLoginRequest;
@@ -8,7 +8,7 @@ import com.cleardesk.model.dto.UserQueryRequest;
 import com.cleardesk.model.dto.UserRegisterRequest;
 import com.cleardesk.model.vo.UserVO;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 用户服务

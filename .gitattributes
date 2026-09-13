@@ -1,0 +1,14 @@
+# 统一行尾，避免 Windows / macOS 协作者之间产生整文件 diff 噪音。
+# 之前没有这个文件时，core.autocrlf=true 的机器每次都会把检出内容改成 CRLF 并刷出警告。
+* text=auto eol=lf
+
+# Windows 批处理必须是 CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 二进制，不要做行尾转换
+*.jar binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.ico binary

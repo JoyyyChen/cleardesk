@@ -1,8 +1,8 @@
 package com.cleardesk.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.cleardesk.common.ErrorCode;
 import com.cleardesk.common.PageResult;
 import com.cleardesk.constant.UserConstant;
@@ -23,9 +23,9 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -68,7 +68,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (!userPassword.equals(checkPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次输入的密码不一致");
         }
-        long accountCount = this.count(new QueryWrapper<User>().eq("userAccount", userAccount));
+        long accountCount = this.count(new LambdaQueryWrapper<User>().eq(User::getUserAccount, userAccount));
         if (accountCount > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
         }
@@ -100,10 +100,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (StringUtils.isAnyBlank(userAccount, userPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
         }
+        // 格式错误、账号不存在、密码错误都返回同一文案，避免枚举有效账号
         if (!ACCOUNT_PATTERN.matcher(userAccount).matches() || userPassword.length() < 8) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号或密码错误");
         }
-        User user = this.getOne(new QueryWrapper<User>().eq("userAccount", userAccount));
+        User user = this.getOne(new LambdaQueryWrapper<User>().eq(User::getUserAccount, userAccount));
         if (user == null || !passwordEncoder.matches(userPassword, user.getUserPassword())) {
             log.info("user login failed, userAccount={}", userAccount);
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号或密码错误");
@@ -111,6 +112,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (user.getUserStatus() == null || user.getUserStatus() != USER_STATUS_NORMAL) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "账号已被禁用");
         }
+        // Session 只存 id，角色和状态每次查库，避免旧权限生效
         request.getSession(true).setAttribute(USER_LOGIN_STATE, user.getId());
         return getUserVO(user);
     }
@@ -133,6 +135,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (currentUser == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN);
         }
+        // 以数据库为准，避免请求期间用户被禁用或删除后仍返回旧快照
         User user = this.getById(currentUser.getId());
         if (user == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN, "登录态无效");
@@ -153,14 +156,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             pageSize = DEFAULT_PAGE_SIZE;
         }
         if (pageSize > MAX_PAGE_SIZE) {
+            // 防止一次拉全表
             pageSize = MAX_PAGE_SIZE;
         }
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         String username = queryRequest == null ? null : queryRequest.getUsername();
         if (StringUtils.isNotBlank(username)) {
-            queryWrapper.like("username", username);
+            queryWrapper.like(User::getUsername, username);
         }
-        queryWrapper.orderByDesc("id");
+        queryWrapper.orderByDesc(User::getId);
         Page<User> page = this.page(new Page<>(current, pageSize), queryWrapper);
         List<UserVO> records = page.getRecords().stream().map(this::getUserVO).collect(Collectors.toList());
         return new PageResult<>(records, page.getTotal(), page.getCurrent(), page.getSize());
@@ -172,6 +176,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户 id 不合法");
         }
         User loginUser = UserHolder.get();
+        // 避免管理员删掉自己后失去管理入口
         if (loginUser != null && loginUser.getId() != null && loginUser.getId().equals(id)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "不能删除当前登录账号");
         }

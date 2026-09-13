@@ -28,4 +28,3 @@ build/
 .env
 application-local.yml
 *.log
-/doc/
