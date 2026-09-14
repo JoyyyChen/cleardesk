@@ -59,13 +59,14 @@ docker run --rm -p 8080:8080 \
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
 | POST | `/user/register` | 无 | 请求体：userAccount、userPassword、checkPassword |
-| POST | `/user/login` | 无 | Session 存在 Redis |
-| POST | `/user/logout` | 无 | 使 Session 失效 |
-| GET | `/user/current` | 登录 | 返回 UserVO，不含密码 |
-| GET | `/user/search` | 管理员 | username / current / pageSize |
-| POST | `/user/delete` | 管理员 | 请求体：`{"id": 1}` |
+| POST | `/user/login` | 无 | Session 存在 Redis，响应带 cookie |
+| POST | `/user/logout` | 需登录 | 使 Session 失效 |
+| GET | `/user/current` | 需登录 | 返回 UserVO，不含密码 |
+| GET | `/user/search` | 管理员 | 查询参数：username（模糊）、current、pageSize |
+| POST | `/user/delete` | 管理员 | 请求体：`{"id": 1}`；逻辑删除，且不能删自己 |
 
-管理员接口使用 `@AuthCheck`。Session 只存用户 id，角色和状态每次从数据库读取。
+管理员接口使用 `@AuthCheck(mustAdmin = true)`。Session 只存用户 id，角色和状态每次从数据库读取。
+没有域名时对外地址形如 `http://<服务器IP>:8080/api`，演示流程见 `doc/interview-prep.md` 第 13 节。
 
 ## 设计说明
 

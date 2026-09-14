@@ -200,7 +200,105 @@
 7. 现在错误响应都是 HTTP 200 + body 里的 `code`，这样设计的利弊是什么？
 8. `/user/search` 只支持按 `username` 模糊查询，数据量大了怎么优化？为什么 `like '%x'` 用不上索引？
 
-## 13. 面试当天
+## 13. 演示脚本（面试时照着念）
+
+**地址：** `http://123.57.252.56:8080/api`（阿里云轻量机，Ubuntu 22.04 + Docker Compose）
+
+### 演示前 30 秒自检
+
+```bash
+ssh root@123.57.252.56
+cd /opt/cleardesk && bash scripts/smoke-test.sh     # 必须"失败 0 项"
+```
+
+挂了就一条命令拉回来（数据在 Docker 卷里，不会丢）：
+
+```bash
+cd /opt/cleardesk && docker compose -f docker-compose.prod.yml -f docker-compose.ip-only.yml up -d
+```
+
+### 场景一：注册 + 登录 + 鉴权（讲"Session 存 Redis"）
+
+```bash
+BASE=http://123.57.252.56:8080/api
+
+# 1) 注册一个新账号
+curl -s -X POST $BASE/user/register -H 'Content-Type: application/json' \
+  -d '{"userAccount":"demo001","userPassword":"12345678","checkPassword":"12345678"}'
+# 预期 {"code":0,"data":4,...}
+
+# 2) 未登录访问受保护接口 → 被拦
+curl -s $BASE/user/current
+# 预期 code 非 0，提示未登录
+
+# 3) 用管理员账号登录，cookie 落到 /tmp/ck.txt
+curl -s -c /tmp/ck.txt -X POST $BASE/user/login -H 'Content-Type: application/json' \
+  -d '{"userAccount":"probe001","userPassword":"12345678"}'
+# 预期 {"code":0,"data":{...userRole":1...}}
+
+# 4) 带上 cookie 再访问 → 通过，看 @AuthCheck 生效
+curl -s -b /tmp/ck.txt $BASE/user/current
+```
+
+**这里主动说**：登录态没存在应用内存里，而是 Spring Session 序列化进 Redis（命名空间 `cleardesk:session`），
+所以应用重启登录态不丢、以后多实例部署也能共享。Session 里**只存用户 id**，角色和状态每次从库里读——
+好处是改了角色立刻生效、不用等 Session 过期，代价是每个请求多一次库查询（第 12 节第 1 题就是问这个）。
+
+### 场景二：管理员搜索 + 逻辑删除（讲"唯一索引 + 逻辑删除"）
+
+```bash
+# 5) 管理员分页搜索
+curl -s -b /tmp/ck.txt "$BASE/user/search?current=1&pageSize=10"
+# 预期 {"code":0,"data":{"records":[...],"total":4,...}}
+
+# 6) 删除 demo001（id 用上一步返回值里的）
+curl -s -b /tmp/ck.txt -X POST $BASE/user/delete -H 'Content-Type: application/json' -d '{"id":4}'
+# 预期 {"code":0,"data":true}
+
+# 7) 再搜索一次 → demo001 消失了
+curl -s -b /tmp/ck.txt "$BASE/user/search?current=1&pageSize=10"
+
+# 8) 删自己 → 被拒绝（这是我特意加的保护）
+curl -s -b /tmp/ck.txt -X POST $BASE/user/delete -H 'Content-Type: application/json' -d '{"id":1}'
+# 预期 {"code":... ,"message":"不能删除当前登录账号"}
+```
+
+**三个可主动抛的点：**
+
+1. **删除是逻辑删除**（`isDelete=1`），不是物理删。MyBatis-Plus 全局配了 `logic-delete-field`，
+   业务代码里只调 `removeById`，框架自动把 `delete` 改写成 `update`，查询也自动带 `isDelete=0`。
+   代价：表会一直膨胀，且 `userAccount` 唯一索引会和已删除的记录冲突（想复用账号要另想办法）。
+2. **第 8 步的保护**：管理员把自己删了就再也没人能做管理操作，所以服务层直接拒绝。
+3. **注册为什么既有唯一索引又先查一次**：先查是为了给出友好提示，唯一索引是并发下的最后防线——
+   两个请求同时通过检查时，数据库会拦住第二个（第 12 节第 4 题）。
+
+### 如果面试官让你用 Postman / Apifox
+
+选 POST，URL 填 `http://123.57.252.56:8080/api/user/login`，Body 选 raw → JSON，
+粘 `{"userAccount":"probe001","userPassword":"12345678"}`，Send。
+**工具会自动保存 Cookie**（比 curl 的 `-c/-b` 省事），后面 `/user/current`、`/user/search` 直接换 URL 即可。
+
+### 演示时别踩的坑
+
+| 坑 | 后果 | 规避 |
+|----|------|------|
+| 用 `https://` 访问 8080 | 日志报 `Invalid character found in method name`，请求失败 | 这个阶段只有 HTTP，等接了域名再上 HTTPS |
+| 忘了 `-b /tmp/ck.txt` | 所有需要登录的接口都返回未登录 | 上面每步都带了，照抄别漏 |
+| 用 `probe002` 登录去搜索 | 403（它是普通用户） | 只有 `probe001` 是管理员 |
+| 机器重启后没等 30 秒 | MySQL 还在初始化就访问，报连接失败 | `restart: unless-stopped` 会自动拉起，等自检变绿 |
+
+### 面试官追问部署（答不上来最扣分的三题）
+
+1. **"数据库端口开着吗？"** → 没开。编排里 MySQL 和 Redis **不映射宿主机端口**，只在 Docker 内网暴露，
+   安全组也只有 22 和 8080。远程连库走 SSH 隧道，不开放 3306。
+2. **"应用为什么用 `mysql` 而不是 `localhost` 连库？"** → 容器有独立的网络命名空间，
+   `localhost` 指容器自己；Compose 的 service 名由 Docker 内部 DNS 解析成内网 IP。
+3. **"启动顺序怎么保证的？"** → `depends_on` 只保证启动顺序、不保证 MySQL 已就绪，
+   所以配了 `healthcheck` + `condition: service_healthy`，MySQL 健康检查通过才起应用。
+
+> 详细原理和完整踩坑记录在 `doc/deployment.md` 和 `doc/deploy-runbook.md`。
+
+## 14. 面试当天
 
 - 不会的**别硬编**。说"这块我了解得不深，我的理解是……可能是错的"比编一个被拆穿的答案好得多。
 - 面试官问"你项目里最难的点是什么" —— 提前准备好一个真实答案（建议用你部署、压测或迁移 Boot 4 的经历）。
