@@ -311,12 +311,8 @@ cd /opt/cleardesk
 bash scripts/smoke-test.sh
 ```
 
-脚本对**本次部署用的是什么文件**很敏感：如果启动时带了 `-f docker-compose.ip-only.yml`，
-自检也要带上，否则它看到的状态不是真实的：
-
-```bash
-COMPOSE_FILE="docker-compose.prod.yml -f docker-compose.ip-only.yml" bash scripts/smoke-test.sh
-```
+不需要额外传参数：脚本自己按 `cleardesk-prod` 这个项目名（写死在编排文件末尾）查容器，
+并按容器名而不是列位置解析状态，所以 `docker compose ps` 的列被截断也不影响它。
 
 预期结尾：`通过 N 项，失败 0 项`。有 FAIL 就按提示回到第 2.3 节的排查顺序。
 

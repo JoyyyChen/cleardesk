@@ -13,12 +13,15 @@
 #     mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -D cleardesk
 set -euo pipefail
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+# 不要用 COMPOSE_FILE 这个变量名传递编排文件：docker compose 不认它，
+# 会把整串当成一个文件名报 "set by COMPOSE_FILE environment variable is invalid"。
+# 这里用数组，需要时改这一行即可。
+COMPOSE_FILES=(-f docker-compose.prod.yml)
 ENV_FILE="${ENV_FILE:-.env}"
 KEEP_DAYS="${KEEP_DAYS:-7}"
 
-[ -f "$COMPOSE_FILE" ] || { echo "找不到 $COMPOSE_FILE，请在仓库根目录执行" >&2; exit 1; }
-[ -f "$ENV_FILE" ]     || { echo "找不到 $ENV_FILE" >&2; exit 1; }
+[ -f "${COMPOSE_FILES[1]}" ] || { echo "找不到 ${COMPOSE_FILES[1]}，请在仓库根目录执行" >&2; exit 1; }
+[ -f "$ENV_FILE" ]          || { echo "找不到 $ENV_FILE" >&2; exit 1; }
 
 set -a; . "./$ENV_FILE"; set +a
 : "${MYSQL_ROOT_PASSWORD:?$ENV_FILE 缺少 MYSQL_ROOT_PASSWORD}"
@@ -32,7 +35,7 @@ echo "[$(date '+%F %T')] 开始备份 $DB -> $out"
 # set -e/pipefail 下管道里任何一环失败都会立刻退出，这里要自己判断并留下可读的报错，
 # 所以临时关掉 -e，用 PIPESTATUS 拿到 mysqldump 的真实退出码。
 set +e
-docker compose -f "$COMPOSE_FILE" exec -T mysql \
+docker compose "${COMPOSE_FILES[@]}" exec -T mysql \
   mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" \
     --single-transaction --quick --default-character-set=utf8mb4 \
     "$DB" | gzip > "$out"

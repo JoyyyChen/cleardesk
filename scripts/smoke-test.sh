@@ -2,15 +2,22 @@
 # ClearDesk 部署自检：在服务器上、仓库根目录执行
 #   cd /opt/cleardesk && bash scripts/smoke-test.sh
 #
-# 用了覆盖文件（无域名阶段）时，要通过 COMPOSE_FILE 传同一组编排，否则看到的状态不是真实的：
-#   COMPOSE_FILE="docker-compose.prod.yml -f docker-compose.ip-only.yml" bash scripts/smoke-test.sh
-#
 # 只做检查，不修改任何数据（注册探针账号属于写操作，见最后一段提示）。
+#
+# 实现说明（踩过的坑，别再改回去）：
+#   1) 不要用 COMPOSE_FILE="a.yml -f b.yml" 这种写法传编排文件。那个变量名
+#      docker compose 不认，会把整串当成一个文件名，报
+#      "set by COMPOSE_FILE environment variable is invalid: stat ..."。
+#   2) 也不要用 `compose ps --format '{{.Health}}'` 解析状态：列会被截断
+#      （CMD 显示成 "java -jar /app/app.j..."），按列位置取值必然错位。
+#      改成直接用容器名查运行状态，两件事同时解决。
 set -uo pipefail
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
 APP_PORT="${APP_PORT:-8080}"
+# 编排文件末尾写死了 name: cleardesk-prod，所以容器名是固定的
+PROJECT="${PROJECT:-cleardesk-prod}"
+COMPOSE_FILES=(-f docker-compose.prod.yml -f docker-compose.ip-only.yml)
 
 pass=0; fail=0; warn=0
 ok()   { printf '  \033[32m[OK]\033[0m   %s\n' "$1"; pass=$((pass+1)); }
@@ -18,15 +25,23 @@ bad()  { printf '  \033[31m[FAIL]\033[0m %s\n' "$1"; fail=$((fail+1)); }
 meh()  { printf '  \033[33m[WARN]\033[0m %s\n' "$1"; warn=$((warn+1)); }
 step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 
-# COMPOSE_FILE 支持传多个 -f（覆盖文件场景），所以按空格拆成参数数组
-compose_files=()
-# shellcheck disable=SC2086  # 这里就是要按空格拆开，是有意的
-for f in $COMPOSE_FILE; do compose_files+=(-f "$f"); done
-compose() { docker compose "${compose_files[@]}" "$@"; }
+# 同时带上基础文件和 ip-only 覆盖文件是安全的：compose 只读文件不启动容器，
+# 而且 ip-only 只覆盖端口映射，不会影响下面这些 exec / logs 的结果。
+compose() { docker compose "${COMPOSE_FILES[@]}" "$@"; }
+
+# 输出该容器的状态串（例如 "Up 20 hours (healthy)" / "Exited (137) 5 minutes ago"），
+# 不存在则返回 1。用制表符做分隔，避免花括号模板里的空格被 docker 拆成多列。
+container_status() {
+  local line
+  line=$(docker ps -a --filter "name=^/${PROJECT}-$1-1\$" --format '{{.Names}}	{{.Status}}' 2>/dev/null | head -1)
+  [ -n "$line" ] || return 1
+  printf '%s' "${line#*	}"
+}
 
 step "0. 前置条件"
-primary_file="${COMPOSE_FILE%% *}"
-if [ -f "$primary_file" ]; then ok "找到 $primary_file"; else bad "当前目录没有 $primary_file（请在仓库根目录执行）"; exit 1; fi
+if [ -f docker-compose.prod.yml ]; then ok "找到 docker-compose.prod.yml"; else bad "当前目录没有 docker-compose.prod.yml（请在仓库根目录执行）"; exit 1; fi
+[ -f docker-compose.ip-only.yml ] && ok "找到 docker-compose.ip-only.yml（无域名阶段的端口覆盖）" \
+                                 || meh "没有 docker-compose.ip-only.yml：如果你启动时没带它，忽略这条"
 if docker info >/dev/null 2>&1; then ok "Docker daemon 可用"; else bad "Docker 不可用：检查 docker 是否启动、当前用户是否在 docker 组（需重新登录）"; exit 1; fi
 if [ -f "$ENV_FILE" ]; then
   ok "找到 $ENV_FILE"
@@ -45,12 +60,21 @@ set -a; . "./$ENV_FILE"; set +a
 MYSQL_DATABASE="${MYSQL_DATABASE:-cleardesk}"
 MYSQL_USER="${MYSQL_USER:-cleardesk}"
 
-step "1. 容器状态"
-ps_out=$(compose ps --format '{{.Service}} {{.State}} {{.Health}}' 2>/dev/null)
-printf '%s\n' "$ps_out" | sed 's/^/       /'
-printf '%s' "$ps_out" | grep -q '^mysql .*healthy' && ok "mysql healthy" || bad "mysql 不是 healthy：compose logs mysql | tail -30"
-printf '%s' "$ps_out" | grep -q '^redis .*healthy' && ok "redis healthy" || bad "redis 不是 healthy：compose logs redis | tail -30"
-printf '%s' "$ps_out" | grep -q '^app .*running'   && ok "app running"     || bad "app 没在跑：compose logs app | tail -50"
+step "1. 容器状态（直接按容器名查，最可靠）"
+for svc in mysql redis app; do
+  if status=$(container_status "$svc"); then
+    case "$status" in
+      *"(healthy)"*) ok "$svc：$status" ;;
+      Up*healthy*)   ok "$svc：$status" ;;
+      Up*)           [ "$svc" = "app" ] && ok "$svc：$status" \
+                                       || meh "$svc：$status（还没变 healthy，等 30 秒再跑一次）" ;;
+      *)             bad "$svc：$status → compose logs $svc --tail 30" ;;
+    esac
+  else
+    bad "$svc 容器不存在（可能启动命令没带 -f docker-compose.ip-only.yml，或项目名不是 $PROJECT）"
+  fi
+done
+docker ps -a --filter "name=^/${PROJECT}-" --format '  {{.Names}}	{{.Status}}'
 
 step "2. 容器内网络解析（应为内网 IP）"
 hosts=$(compose exec -T app getent hosts mysql 2>/dev/null || true)
