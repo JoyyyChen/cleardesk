@@ -15,13 +15,14 @@ set -euo pipefail
 
 # 不要用 COMPOSE_FILE 这个变量名传递编排文件：docker compose 不认它，
 # 会把整串当成一个文件名报 "set by COMPOSE_FILE environment variable is invalid"。
-# 这里用数组，需要时改这一行即可。
+# 这里用数组；ip-only 覆盖文件存在时自动带上（它只影响端口映射，不影响 exec）。
 COMPOSE_FILES=(-f docker-compose.prod.yml)
+[ -f docker-compose.ip-only.yml ] && COMPOSE_FILES+=(-f docker-compose.ip-only.yml)
 ENV_FILE="${ENV_FILE:-.env}"
 KEEP_DAYS="${KEEP_DAYS:-7}"
 
-[ -f "${COMPOSE_FILES[1]}" ] || { echo "找不到 ${COMPOSE_FILES[1]}，请在仓库根目录执行" >&2; exit 1; }
-[ -f "$ENV_FILE" ]          || { echo "找不到 $ENV_FILE" >&2; exit 1; }
+[ -f docker-compose.prod.yml ] || { echo "找不到 docker-compose.prod.yml，请在仓库根目录执行" >&2; exit 1; }
+[ -f "$ENV_FILE" ]             || { echo "找不到 $ENV_FILE" >&2; exit 1; }
 
 set -a; . "./$ENV_FILE"; set +a
 : "${MYSQL_ROOT_PASSWORD:?$ENV_FILE 缺少 MYSQL_ROOT_PASSWORD}"

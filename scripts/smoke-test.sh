@@ -17,7 +17,10 @@ ENV_FILE="${ENV_FILE:-.env}"
 APP_PORT="${APP_PORT:-8080}"
 # 编排文件末尾写死了 name: cleardesk-prod，所以容器名是固定的
 PROJECT="${PROJECT:-cleardesk-prod}"
-COMPOSE_FILES=(-f docker-compose.prod.yml -f docker-compose.ip-only.yml)
+# 基础编排必须有；ip-only 覆盖文件只在"无域名阶段"存在，
+# 接入域名后删掉它，脚本要能自动适应，不能写死。
+COMPOSE_FILES=(-f docker-compose.prod.yml)
+[ -f docker-compose.ip-only.yml ] && COMPOSE_FILES+=(-f docker-compose.ip-only.yml)
 
 pass=0; fail=0; warn=0
 ok()   { printf '  \033[32m[OK]\033[0m   %s\n' "$1"; pass=$((pass+1)); }
