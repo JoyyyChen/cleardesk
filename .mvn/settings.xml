@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Docker 构建专用的 Maven 配置。
+
+  为什么需要它：Docker 里的 Maven 是一个隔离环境，**不读你本机的 ~/.m2/settings.xml**。
+  不配这个文件的话，容器里的 Maven 会用默认中央仓库 https://repo.maven.apache.org/maven2
+  （服务器在国外），国内构建时的典型报错是：
+
+      [ERROR] Could not transfer artifact ... from/to central (...)
+      [ERROR] -> [Help 1]   Remote host terminated the handshake
+
+  位置为什么是 .mvn/settings.xml：Maven 3.9+ 会自动使用项目根目录下的 .mvn/settings.xml，
+  所以 Dockerfile 里只要 COPY .mvn .mvn 就会生效，无需再传 -s 参数，也无需改 ENTRYPOINT。
+
+  如果哪天阿里云镜像缺某个依赖，把 <mirror> 整段注释掉即可回退到官方中央仓库。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              https://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+  <mirrors>
+    <!-- central 的镜像必须用 <id>central</id>，否则覆盖不掉 Maven 内置的中央仓库定义 -->
+    <mirror>
+      <id>central</id>
+      <name>Aliyun Public Mirror</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+
+</settings>

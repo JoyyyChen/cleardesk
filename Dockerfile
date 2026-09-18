@@ -19,7 +19,12 @@ ARG REGISTRY=
 FROM ${REGISTRY}maven:3.9-eclipse-temurin-21 AS builder
 WORKDIR /build
 
-# 先只复制 pom.xml 单独拉依赖，改源码时能命中这一层缓存
+# 先复制 Maven 项目级配置：.mvn/settings.xml 里配了国内镜像源。
+# Docker 里的 Maven 不读本机 ~/.m2/settings.xml，不复制这个文件就会去
+# repo.maven.apache.org（国外）拉依赖，国内构建会报 "Remote host terminated the handshake"。
+COPY .mvn .mvn
+
+# 再只复制 pom.xml 单独拉依赖，改源码时能命中这一层缓存
 COPY pom.xml .
 RUN mvn -B -DskipTests dependency:go-offline
 

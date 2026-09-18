@@ -31,3 +31,6 @@ application-local.yml
 
 # 数据库备份产物（含真实数据，绝不入库）
 backups/
+
+# 本机构建后导出的镜像包（约 384MB，永远不该进仓库）
+*.tar
