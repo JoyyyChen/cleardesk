@@ -472,17 +472,35 @@ cd /opt/cleardesk && bash scripts/smoke-test.sh
 
 ---
 
-## 11. 路线图：部署成功之后
+## 11. 部署成功之后
 
-| 优先级 | 事项 | 为什么 |
-|---|---|---|
-| 高 | 把 `pull_policy: never` 和 `JAVA_TOOL_OPTIONS` 提交进仓库 | 现在只改在服务器工作区，下次 `git pull` 可能冲突 |
-| 高 | 造管理员账号 + 跑 `smoke-test.sh` | 演示时 `search`/`delete` 需要管理员 |
-| 高 | 配每日数据库备份（cron + `scripts/backup-db.sh`） | 没备份的数据库等于随时会丢 |
-| 中 | 修 Git 提交身份（`git config --global user.name / user.email`，别用占位值） | 不修的话 GitHub 上不显示头像、不算贡献图 |
-| 中 | 本文档脱敏后提交 | 里面有公网 IP、实例 ID、家宽 IP 段，而仓库是公开的 |
-| 中 | SSH 登录改密钥（D6 的第二阶段） | 现在还是密码登录，长期有爆破风险 |
-| 低 | 域名 + Nginx + HTTPS | 需要备案；同时把 `session.cookie.secure` 打开 |
+主链路在本文写作时**已全部完成并验证**。后续待办见 **[TODO.md](TODO.md)**（含每项的具体命令和验收标准）。
+
+已经完成的（留档，别重复做）：
+
+| 事项 | 结果 |
+|---|---|
+| 配置提交进仓库（`pull_policy` + `JAVA_TOOL_OPTIONS`） | 提交 `6066f953` |
+| 造管理员账号 + 跑 `smoke-test.sh` | 19 项全通过，`probe001` 已是管理员 |
+| 修 Git 提交身份 | 改为真实账号 + GitHub noreply 邮箱 |
+| 本文档脱敏后提交 | 公网 IP / 实例 ID / 内网 IP / 家宽 IP 段全部改为占位符 |
+
+还没做的，按优先级：
+
+| 优先级 | 事项 | 为什么 | 详见 |
+|---|---|---|---|
+| 高 | **配每日数据库备份（cron）** | 现在一个备份都没有 | TODO 第 1 项 |
+| 高 | **做一次恢复演练** | 没演练过的备份不算备份 | TODO 第 2 项 |
+| 高 | 把备份推到对象存储 | 备份和数据库同机器，机器挂了就一起没 | TODO 第 3 项 |
+| 中 | SSH 登录改密钥（D6 第二阶段） | 现在还是密码登录 root | TODO 第 4 项 |
+| 中 | `.env` 备份到密码管理器 | 文件丢了密码就找不回来 | TODO 第 5 项 |
+| 中 | 加 Actuator 健康检查端点 | 应用挂了只能靠人发现 | TODO 第 6 项 |
+| 低 | 域名 + Nginx + HTTPS | 需要备案 | TODO 第 9 项 |
+| 低 | Flyway 管表结构变更 | 现在改字段只能手改库 | TODO 第 10 项 |
+| 低 | GitHub Actions CI/CD | 把手动部署升级成自动 | TODO 第 11 项 |
+
+> ⚠️ **一个必须记住的技术债**：备份脚本自己都写了 —— **"备份还在同一台机器上，机器挂了就一起没了"**。
+> 它能防"误删数据"，防不了"磁盘/机器故障"。面试被问"你的备份在哪"，答"同一台机器"是减分项。
 
 ---
 
@@ -644,9 +662,44 @@ Add-Content .gitignore "`n# 本机构建后导出的镜像包`n*.tar"
 
 > **为什么不用 `-Encoding utf8`**：PowerShell 5.1 的 `utf8` 会**写入 BOM**（开头多三个隐藏字节 `EF BB BF`），而 BOM 在 Linux 上常被当成内容的一部分 —— 又是另一个坑。
 
-### 坑 12（预警，还没踩到）：SSH 突然连不上
+### 坑 12：SSH 突然连不上（实测发生过）
 
-**第一个怀疑对象：自家宽带的公网 IP 变了**。修法：阿里云控制台 → 防火墙 → 22 那条 → 来源改成新的 `/24`。兜底：右上角「远程连接」。
+**第一个怀疑对象：自家宽带的公网 IP 变了。** 修法：阿里云控制台 → 防火墙 → 22 那条 → 来源改成新的 `/24`。兜底：右上角「远程连接」。
+
+**实测**：本项目实操期间，家宽出口 IP 从 `<旧网段>.x` 变成了 `<新网段>.x` —— **换了整个网段**。当时 SSH 会话还活着（长连接不会因 IP 变化而断），但只要重连就会失败。
+
+> 这条从"理论风险"变成了"实测事实"。也正是为什么防火墙来源要写 `/24` 而不是精确 IP —— 至少留一个网段的缓冲。
+
+### 坑 13：`git status` 一直显示 `M`，但 `git diff` 是空的（"幻影修改"）
+
+**现象**：在服务器上用 `sed -i` 改过 `docker-compose.prod.yml` 之后，`M docker-compose.prod.yml` 一直消不掉，
+`git checkout -- 文件`、`git update-index --refresh` 都无效，**但 `git diff` 输出完全为空**。
+
+**诊断**（三条命令看穿）：
+
+```bash
+file docker-compose.prod.yml                        # 看有没有 "with CRLF line terminators"
+head -3 docker-compose.prod.yml | cat -A            # 工作区行尾：$ 还是 ^M$
+git show HEAD:docker-compose.prod.yml | head -3 | cat -A   # 版本库里行尾：作对比
+```
+
+本例输出确认了：**工作区是 CRLF（`^M$`），版本库里是 LF（`$`）**。
+
+**根因**：`sed -i` 重写文件时引入了 `\r`。
+`git status` 走"元数据快速判断"（时间戳/inode 变了就报 `M`），而 `git diff` 会按 `.gitattributes` 里的 `eol=lf` **规范化后再比对**（所以内容一致、diff 为空）。
+**两个命令都对，只是回答的问题不同：`git diff` 是内容真相，`git status` 是元数据警报。**
+
+**修法**：
+
+```bash
+git fetch origin && git reset --hard origin/main
+```
+
+`checkout -- 文件` 只从**索引**恢复到工作区；`reset --hard origin/main` 是**索引和工作区一起**用远程内容重建，所以元数据和内容同时被纠正。
+⚠️ `--hard` 会永久丢弃未提交改动 —— 这次改动已在远程，所以是安全的；别在有未提交工作时随手用。
+
+**根本预防**：还是那句 —— **不要在服务器上手工改文件**。这一个 5 秒的改动，衍生出 4 个连环问题：
+`git commit` 因缺身份失败 → `git push` 被只读密钥拒绝 → 本地改动挡住 `git pull` → `sed -i` 带来幻影修改。
 
 ---
 
