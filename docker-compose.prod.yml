@@ -49,6 +49,8 @@ services:
     networks: [cleardesk-net]
 
   app:
+  # 镜像已由本机构建并 load 进来，禁止 Compose 自作主张重新构建（见 doc/beginner-deploy.md）
+    pull_policy: never
     build:
       context: .
       # 拉不到 Docker Hub 时覆盖，例如 docker.1ms.run/
@@ -67,6 +69,8 @@ services:
       MYSQL_SSL: "false"
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+            # 限制 JVM 堆：2G 内存的机器上防止应用把内存吃光
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx512m"
     ports:
       # 只监听宿主机回环，由 Nginx 反代并终止 TLS；
       # 写成 "8080:8080" 会让应用端口直接暴露到公网。
